@@ -2,18 +2,12 @@
 #include <Ticker.h>
 #include <TFT_eSPI.h> // Graphics and font library for ST7735 driver chip
 #include <SPI.h>
+#include "ws2.h"
 
 #ifndef ESP32
 #pragma message(THIS EXAMPLE IS FOR ESP32 ONLY!)
 #error Select ESP32 board.
 #endif
-
-/**************************************************************/
-/* Example how to read DHT sensors from an ESP32 using multi- */
-/* tasking.                                                   */
-/* This example depends on the Ticker library to wake up      */
-/* the task every 20 seconds                                  */
-/**************************************************************/
 
 DHTesp dht;
 TFT_eSPI tft = TFT_eSPI();  // Invoke library, pins defined in User_Setup.h
@@ -61,7 +55,7 @@ bool initTemp() {
     Serial.println("Failed to start task for temperature update");
     return false;
   } else {
-    // Start update of environment data every 20 seconds
+    // Start update of environment data every 5 seconds
     tempTicker.attach(5, triggerGetTemp);
   }
   return true;
@@ -154,13 +148,14 @@ bool getTemperature() {
   Serial.println(" T:" + String(newValues.temperature) + " H:" + String(newValues.humidity) + " I:" + String(heatIndex) + " D:" + String(dewPoint) + " " + comfortStatus);
   
   tft.fillScreen(TFT_BLACK);
-  tft.setCursor(0, 0, 2);
+  tft.setCursor(0, 0, 1);
   tft.setTextColor(TFT_WHITE,TFT_BLACK);  
-  tft.setTextSize(1);
-  tft.println("Temperatura: " + String(newValues.temperature));
-  tft.println("Humidade: " + String(newValues.humidity));
-  tft.println("Indice de calor: " + String(heatIndex));
-  tft.println("Ponto de orvalho: " + String(dewPoint));
+  tft.setTextSize(2);
+  tft.println("Temperatura: " + String(newValues.temperature) + " C");
+  tft.println("Humidade:     " + String(newValues.humidity) + "%");
+  tft.println("In. de calor:  " + String(heatIndex));
+  tft.println("Orvalho:     " + String(dewPoint) + " C");
+  tft.println();
   tft.println(comfortStatus);
 
   return true;
@@ -174,6 +169,8 @@ void setup()
 
   tft.init();
   tft.setRotation(1);
+  tft.pushImage(0, 0, 240, 135, ws2);
+  delay(2000);
 
   initTemp();
   // Signal end of setup() to tasks
