@@ -13,11 +13,15 @@ int leftPressed=0;
 int rightPressed=0;
 
 DHTesp dht;
-TFT_eSPI tft = TFT_eSPI();  // Invoke library, pins defined in User_Setup.h
+TFT_eSPI tft = TFT_eSPI();
 
-bool getTemperature();
-void tomorrowScreen();
+bool homeScreen();
+void setForecastValues(String *d, String *w, String *des, int *mx, int *mn, int arrayPosition);
+void forecastScreen(String *d, String *w, String *des, int *mx, int *mn);
 void checkButtons();
+void generateScreen();
+void connectWiFi();
+void callHGWeather();
 
 ComfortState cf;
 int dhtPin = 33;
@@ -25,12 +29,13 @@ int dhtPin = 33;
 const char* ssid     = "";
 const char* password = "";
 HTTPClient http;
-String url="https://api.hgbrasil.com/weather?array_limit=4&fields=only_results,temp,date,time,description,currently,city,humidity,wind_speedy,sunrise,sunset,forecast,date,weekday,max,min,description,&key=38c91805&woeid=455821";
+String endpoint="https://api.hgbrasil.com/weather?array_limit=3&fields=only_results,temp,date,time,description,currently,city,humidity,wind_speedy,sunrise,sunset,forecast,date,weekday,max,min,description,&key=38c91805&woeid=455821";
 String payload="";
 DynamicJsonDocument doc(1000);
 
 int count = 0;
 int screen = 0;
+int lastScreen = 2;
 
 String date;
 String weekday;
@@ -41,8 +46,92 @@ String weekday1;
 String description1;
 int max1;
 int min1;
+String date2;
+String weekday2;
+String description2;
+int max2;
+int min2;
 
-bool getTemperature() {
+void setup() {
+  Serial.begin(115200);
+
+  //Config do sensor
+  dht.setup(dhtPin, DHTesp::DHT11);
+
+  //Config dos botoes
+  pinMode(LEFT_BUTTON,INPUT_PULLUP);
+  pinMode(RIGHT_BUTTON,INPUT_PULLUP);
+
+  //Config da tela
+  tft.init();
+  tft.setRotation(1);
+  tft.pushImage(0, 0, 240, 135, ws2);
+
+  //Config do wifi
+  connectWiFi();
+
+  //Requisicao http
+  callHGWeather();
+}
+
+void loop() {
+  checkButtons();
+  count++;
+  if (count >= 400) {
+    count = 0;
+    if (screen == 0) homeScreen();
+  }
+  delay(50);
+}
+
+void checkButtons() {
+  if (digitalRead(LEFT_BUTTON)==0){
+    if (leftPressed == 0) {
+      leftPressed = 1;
+      if (screen > 0) {
+        screen--;
+      } else {
+        screen = lastScreen;
+      }
+      generateScreen();
+    }
+  } else {
+    leftPressed=0;
+  }
+
+  if (digitalRead(RIGHT_BUTTON)==0){
+    if (rightPressed == 0) {
+      rightPressed = 1;
+      if (screen < lastScreen) {
+        screen++;
+      } else {
+        screen = 0;
+      }
+      generateScreen();
+    }
+  } else {
+    rightPressed=0;
+  }
+}
+
+void generateScreen() {
+  switch(screen) {
+    case 0:
+      homeScreen();
+      break;
+    case 1:
+      forecastScreen(&date1, &weekday1, &description1, &max1, &min1);
+      break;
+    case 2:
+      forecastScreen(&date2, &weekday2, &description2, &max2, &min2);
+      break;
+    default:
+      homeScreen();
+      break;
+  };
+}
+
+bool homeScreen() {
   TempAndHumidity newValues = dht.getTempAndHumidity();
   
   if (dht.getStatus() != 0) {
@@ -106,34 +195,28 @@ bool getTemperature() {
   return true;
 }
 
-void tomorrowScreen() {
+void forecastScreen(String *d, String *w, String *des, int *mx, int *mn) {
   tft.fillScreen(TFT_BLACK);
   tft.setCursor(0, 0, 1);
   tft.setTextColor(TFT_WHITE,TFT_BLACK);  
   tft.setTextSize(2);
-  tft.println(weekday1 + ", " + date1);
+  tft.println(*w + ", " + *d);
   tft.println();
-  tft.println(description1);
+  tft.println(*des);
   tft.println();
-  tft.println("Min: " + String(min1) + " C");
-  tft.println("Max: " + String(max1) + " C");
+  tft.println("Min: " + String(*mn) + " C");
+  tft.println("Max: " + String(*mx) + " C");
 }
 
-void setup() {
-  Serial.begin(115200);
-  //Config do sensor
-  dht.setup(dhtPin, DHTesp::DHT11);
+void setForecastValues(String *d, String *w, String *des, int *mx, int *mn, int arrayPosition) {
+  *d = doc["forecast"][arrayPosition]["date"].as<String>();
+  *w = doc["forecast"][arrayPosition]["weekday"].as<String>();
+  *des = doc["forecast"][arrayPosition]["description"].as<String>();
+  *mx = doc["forecast"][arrayPosition]["max"].as<int>();
+  *mn = doc["forecast"][arrayPosition]["min"].as<int>();
+}
 
-  //Config dos botoes
-  pinMode(LEFT_BUTTON,INPUT_PULLUP);
-  pinMode(RIGHT_BUTTON,INPUT_PULLUP);
-
-  //Config da tela
-  tft.init();
-  tft.setRotation(1);
-  tft.pushImage(0, 0, 240, 135, ws2);
-
-  //Config do wifi e requisicao http
+void connectWiFi() {
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(300);
@@ -143,7 +226,10 @@ void setup() {
   Serial.println("WiFi connected.");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
-  http.begin(url);
+}
+
+void callHGWeather() {
+  http.begin(endpoint);
   int httpCode = http.GET();
   if (httpCode > 0) {
     payload = http.getString();
@@ -154,49 +240,14 @@ void setup() {
     payload.toCharArray(inp,1000);
     deserializeJson(doc,inp);
 
-    date = doc["forecast"][1]["date"].as<String>();
-    weekday = doc["forecast"][1]["weekday"].as<String>();
+    date = doc["forecast"][0]["date"].as<String>();
+    weekday = doc["forecast"][0]["weekday"].as<String>();
     description = doc["description"].as<String>();
 
-    date1 = doc["forecast"][2]["date"].as<String>();
-    weekday1 = doc["forecast"][2]["weekday"].as<String>();
-    description1 = doc["forecast"][2]["description"].as<String>();
-    max1 = doc["forecast"][2]["max"].as<int>();
-    min1 = doc["forecast"][2]["min"].as<int>();
+    setForecastValues(&date1, &weekday1, &description1, &max1, &min1, 1);
+    setForecastValues(&date2, &weekday2, &description2, &max2, &min2, 2);
   } else {
     Serial.println("Error on HTTP request");
   }
   http.end();
-}
-
-void loop() {
-  checkButtons();
-  count++;
-  if (count >= 100) {
-    count = 0;
-    if (screen==0) getTemperature();
-  }
-  delay(50);
-}
-
-void checkButtons() {
-  if (digitalRead(LEFT_BUTTON)==0){
-    if (leftPressed == 0) {
-      leftPressed = 1;
-      screen = 1;
-      tomorrowScreen();
-    }
-  } else {
-    leftPressed=0;
-  }
-
-  if (digitalRead(RIGHT_BUTTON)==0){
-    if (rightPressed == 0) {
-      rightPressed = 1;
-      screen = 0;
-      getTemperature();
-    }
-  } else {
-    rightPressed=0;
-  }
 }
