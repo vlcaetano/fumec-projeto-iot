@@ -1,26 +1,47 @@
-#include "DHTesp.h" // Click here to get the library: http://librarymanager/All#DHTesp
-#include <Ticker.h>
-#include <TFT_eSPI.h> // Graphics and font library for ST7735 driver chip
+#include "DHTesp.h" // https://github.com/beegee-tokyo/DHTesp
+#include <TFT_eSPI.h> // https://github.com/Bodmer/TFT_eSPI
 #include <SPI.h>
+#include <ArduinoJson.h>  //https://github.com/bblanchon/ArduinoJson.git
+#include <WiFi.h>
+#include <HTTPClient.h>
+
 #include "ws2.h"
+
+#define LEFT_BUTTON 0
+#define RIGHT_BUTTON 35
+int leftPressed=0;
+int rightPressed=0;
 
 DHTesp dht;
 TFT_eSPI tft = TFT_eSPI();  // Invoke library, pins defined in User_Setup.h
 
 bool getTemperature();
+void tomorrowScreen();
+void checkButtons();
 
-/** Comfort profile */
 ComfortState cf;
-/** Pin number for DHT11 data pin */
 int dhtPin = 33;
 
-/**
- * getTemperature
- * Reads temperature from DHT11 sensor
- * @return bool
- *    true if temperature could be aquired
- *    false if aquisition failed
-*/
+const char* ssid     = "";
+const char* password = "";
+HTTPClient http;
+String url="https://api.hgbrasil.com/weather?array_limit=4&fields=only_results,temp,date,time,description,currently,city,humidity,wind_speedy,sunrise,sunset,forecast,date,weekday,max,min,description,&key=38c91805&woeid=455821";
+String payload="";
+DynamicJsonDocument doc(1000);
+
+int count = 0;
+int screen = 0;
+
+String date;
+String weekday;
+String description;
+
+String date1;
+String weekday1;
+String description1;
+int max1;
+int min1;
+
 bool getTemperature() {
   TempAndHumidity newValues = dht.getTempAndHumidity();
   
@@ -63,7 +84,7 @@ bool getTemperature() {
       comfortStatus = "Frio e seco";
       break;
     default:
-      comfortStatus = "Unknown:";
+      comfortStatus = "Desconhecido";
       break;
   };
 
@@ -75,27 +96,107 @@ bool getTemperature() {
   tft.setTextSize(2);
   tft.println("Temperatura: " + String(newValues.temperature) + " C");
   tft.println("Humidade:     " + String(newValues.humidity) + "%");
-  tft.println("In. de calor:  " + String(heatIndex));
-  tft.println("Orvalho:     " + String(dewPoint) + " C");
-  tft.println();
+  // tft.println("In. de calor:  " + String(heatIndex));
+  // tft.println("Orvalho:     " + String(dewPoint) + " C");
   tft.println(comfortStatus);
+  tft.println();
+  tft.println(weekday + ", " + date);
+  tft.println(description);
 
   return true;
 }
 
-void setup()
-{
-  Serial.begin(115200);
+void tomorrowScreen() {
+  tft.fillScreen(TFT_BLACK);
+  tft.setCursor(0, 0, 1);
+  tft.setTextColor(TFT_WHITE,TFT_BLACK);  
+  tft.setTextSize(2);
+  tft.println(weekday1 + ", " + date1);
+  tft.println();
+  tft.println(description1);
+  tft.println();
+  tft.println("Min: " + String(min1) + " C");
+  tft.println("Max: " + String(max1) + " C");
+}
 
+void setup() {
+  Serial.begin(115200);
+  //Config do sensor
   dht.setup(dhtPin, DHTesp::DHT11);
 
+  //Config dos botoes
+  pinMode(LEFT_BUTTON,INPUT_PULLUP);
+  pinMode(RIGHT_BUTTON,INPUT_PULLUP);
+
+  //Config da tela
   tft.init();
   tft.setRotation(1);
   tft.pushImage(0, 0, 240, 135, ws2);
-  delay(2000);
+
+  //Config do wifi e requisicao http
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(300);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected.");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  http.begin(url);
+  int httpCode = http.GET();
+  if (httpCode > 0) {
+    payload = http.getString();
+    Serial.println(httpCode);
+    Serial.println(payload);
+
+    char inp[1000];
+    payload.toCharArray(inp,1000);
+    deserializeJson(doc,inp);
+
+    date = doc["forecast"][1]["date"].as<String>();
+    weekday = doc["forecast"][1]["weekday"].as<String>();
+    description = doc["description"].as<String>();
+
+    date1 = doc["forecast"][2]["date"].as<String>();
+    weekday1 = doc["forecast"][2]["weekday"].as<String>();
+    description1 = doc["forecast"][2]["description"].as<String>();
+    max1 = doc["forecast"][2]["max"].as<int>();
+    min1 = doc["forecast"][2]["min"].as<int>();
+  } else {
+    Serial.println("Error on HTTP request");
+  }
+  http.end();
 }
 
 void loop() {
-  getTemperature();
-  delay(5000);
+  checkButtons();
+  count++;
+  if (count >= 100) {
+    count = 0;
+    if (screen==0) getTemperature();
+  }
+  delay(50);
+}
+
+void checkButtons() {
+  if (digitalRead(LEFT_BUTTON)==0){
+    if (leftPressed == 0) {
+      leftPressed = 1;
+      screen = 1;
+      tomorrowScreen();
+    }
+  } else {
+    leftPressed=0;
+  }
+
+  if (digitalRead(RIGHT_BUTTON)==0){
+    if (rightPressed == 0) {
+      rightPressed = 1;
+      screen = 0;
+      getTemperature();
+    }
+  } else {
+    rightPressed=0;
+  }
 }
