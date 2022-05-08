@@ -6,6 +6,7 @@
 #include <HTTPClient.h>
 
 #include "ws2.h"
+#include "myLoading.h"
 
 #define LEFT_BUTTON 0
 #define RIGHT_BUTTON 35
@@ -15,6 +16,8 @@ int rightPressed=0;
 DHTesp dht;
 TFT_eSPI tft = TFT_eSPI();
 
+TaskHandle_t loadingTaskHandle = NULL;
+void loadingTask(void *pvParameters);
 bool homeScreen();
 void setForecastValues(String *d, String *w, String *des, int *mx, int *mn, int arrayPosition);
 void forecastScreen(String *d, String *w, String *des, int *mx, int *mn);
@@ -70,8 +73,13 @@ void setup() {
   //Config do wifi
   connectWiFi();
 
+  xTaskCreate(loadingTask, "loadingTask", 4000, NULL, 1, &loadingTaskHandle);
+
   //Requisicao http
   callHGWeather();
+
+  vTaskDelete(loadingTaskHandle);
+  homeScreen();
 }
 
 void loop() {
@@ -82,6 +90,17 @@ void loop() {
     if (screen == 0) homeScreen();
   }
   delay(50);
+}
+
+void loadingTask(void *pvParameters) {
+  int frame = 0;
+  tft.fillScreen(TFT_BLACK);
+  for (;;) {
+    vTaskDelay(pdMS_TO_TICKS(40));
+    tft.pushImage(97, 41, 45, 52, myLoading[frame]);
+    frame++;
+    if (frame >= 40) frame = 0;
+  }
 }
 
 void checkButtons() {
