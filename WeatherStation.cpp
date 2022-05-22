@@ -1,8 +1,10 @@
 #include "DHTesp.h" // https://github.com/beegee-tokyo/DHTesp
 #include <TFT_eSPI.h> // https://github.com/Bodmer/TFT_eSPI
+#include <NTPClient.h> // https://github.com/arduino-libraries/NTPClient
 #include <SPI.h>
-#include <ArduinoJson.h>  //https://github.com/bblanchon/ArduinoJson.git
+#include <ArduinoJson.h>  // https://github.com/bblanchon/ArduinoJson.git
 #include <WiFi.h>
+#include <WiFiUdp.h>
 #include <HTTPClient.h>
 
 #include "ws2.h"
@@ -18,8 +20,10 @@ TFT_eSPI tft = TFT_eSPI();
 
 TaskHandle_t loadingTaskHandle = NULL;
 TaskHandle_t callHGWeatherTaskHandle = NULL;
+TaskHandle_t callNTPClientTaskHandle = NULL;
 void loadingTask(void *pvParameters);
 void callHGWeatherTask(void *pvParameters);
+void callNTPClientTask(void *pvParameters);
 bool homeScreen();
 void setForecastValues(String *d, String *w, String *des, int *mx, int *mn, int arrayPosition);
 void forecastScreen(String *d, String *w, String *des, int *mx, int *mn);
@@ -58,6 +62,15 @@ String description2;
 int max2;
 int min2;
 
+// Configurações do Servidor NTP
+const char* servidorNTP = "a.st1.ntp.br"; // Servidor NTP para pesquisar a hora
+ 
+const int fusoHorario = -10800; // Fuso horário em segundos (-03h = -10800 seg)
+const int taxaDeAtualizacao = 1800000; // Taxa de atualização do servidor NTP em milisegundos
+String formattedDate;
+WiFiUDP ntpUDP; // Declaração do Protocolo UDP
+NTPClient timeClient(ntpUDP, servidorNTP, fusoHorario, 60000);
+
 void setup() {
   Serial.begin(115200);
 
@@ -78,6 +91,7 @@ void setup() {
 
   xTaskCreate(loadingTask, "loadingTask", 4000, NULL, 1, &loadingTaskHandle);
   xTaskCreate(callHGWeatherTask, "callHGWeatherTask", 4000, NULL, 1, &callHGWeatherTaskHandle);
+  xTaskCreate(callNTPClientTask, "callNTPClientTask", 4000, NULL, 1, &callNTPClientTaskHandle);
 
   //Requisicao http
   callHGWeather();
@@ -111,6 +125,14 @@ void callHGWeatherTask(void *pvParameters) {
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(300000));
     callHGWeather();
+  }
+}
+
+void callNTPClientTask(void *pvParameters) {
+  for (;;) {
+    timeClient.update();
+    hourAndMinutes = timeClient.getFormattedTime().substring(0, 5);
+    vTaskDelay(pdMS_TO_TICKS(60000));
   }
 }
 
@@ -219,7 +241,7 @@ bool homeScreen() {
   // tft.println("Orvalho:     " + String(dewPoint) + " C");
   tft.println(comfortStatus);
   tft.println();
-  tft.println(weekday + ", " + date + " " + hourAndMinutes);
+  tft.println(weekday + ", " + date + " - " + hourAndMinutes);
   tft.println(description);
 
   return true;
@@ -273,7 +295,6 @@ void callHGWeather() {
     date = doc["forecast"][0]["date"].as<String>();
     weekday = doc["forecast"][0]["weekday"].as<String>();
     description = doc["description"].as<String>();
-    hourAndMinutes = doc["time"].as<String>();
 
     setForecastValues(&date1, &weekday1, &description1, &max1, &min1, 1);
     setForecastValues(&date2, &weekday2, &description2, &max2, &min2, 2);
