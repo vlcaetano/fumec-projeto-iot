@@ -17,7 +17,9 @@ DHTesp dht;
 TFT_eSPI tft = TFT_eSPI();
 
 TaskHandle_t loadingTaskHandle = NULL;
+TaskHandle_t callHGWeatherTaskHandle = NULL;
 void loadingTask(void *pvParameters);
+void callHGWeatherTask(void *pvParameters);
 bool homeScreen();
 void setForecastValues(String *d, String *w, String *des, int *mx, int *mn, int arrayPosition);
 void forecastScreen(String *d, String *w, String *des, int *mx, int *mn);
@@ -43,6 +45,7 @@ int lastScreen = 2;
 String date;
 String weekday;
 String description;
+String hourAndMinutes;
 
 String date1;
 String weekday1;
@@ -74,6 +77,7 @@ void setup() {
   connectWiFi();
 
   xTaskCreate(loadingTask, "loadingTask", 4000, NULL, 1, &loadingTaskHandle);
+  xTaskCreate(callHGWeatherTask, "callHGWeatherTask", 4000, NULL, 1, &callHGWeatherTaskHandle);
 
   //Requisicao http
   callHGWeather();
@@ -96,10 +100,17 @@ void loadingTask(void *pvParameters) {
   int frame = 0;
   tft.fillScreen(TFT_BLACK);
   for (;;) {
-    vTaskDelay(pdMS_TO_TICKS(40));
-    tft.pushImage(97, 41, 45, 52, myLoading[frame]);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    tft.pushImage(95, 43, 50, 50, myLoading[frame]);
     frame++;
-    if (frame >= 40) frame = 0;
+    if (frame >= 8) frame = 0;
+  }
+}
+
+void callHGWeatherTask(void *pvParameters) {
+  for (;;) {
+    vTaskDelay(pdMS_TO_TICKS(300000));
+    callHGWeather();
   }
 }
 
@@ -208,7 +219,7 @@ bool homeScreen() {
   // tft.println("Orvalho:     " + String(dewPoint) + " C");
   tft.println(comfortStatus);
   tft.println();
-  tft.println(weekday + ", " + date);
+  tft.println(weekday + ", " + date + " " + hourAndMinutes);
   tft.println(description);
 
   return true;
@@ -262,6 +273,7 @@ void callHGWeather() {
     date = doc["forecast"][0]["date"].as<String>();
     weekday = doc["forecast"][0]["weekday"].as<String>();
     description = doc["description"].as<String>();
+    hourAndMinutes = doc["time"].as<String>();
 
     setForecastValues(&date1, &weekday1, &description1, &max1, &min1, 1);
     setForecastValues(&date2, &weekday2, &description2, &max2, &min2, 2);
