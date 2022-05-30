@@ -38,7 +38,7 @@ int dhtPin = 33;
 const char* ssid     = "";
 const char* password = "";
 HTTPClient http;
-String endpoint="https://api.hgbrasil.com/weather?array_limit=3&fields=only_results,temp,date,time,description,currently,city,humidity,wind_speedy,sunrise,sunset,forecast,date,weekday,max,min,description,&key=38c91805&woeid=455821";
+String endpoint="https://api.hgbrasil.com/weather?array_limit=3&fields=only_results,temp,date,time,description,currently,city,humidity,wind_speedy,sunrise,sunset,forecast,date,weekday,max,min,description,&key=a9be0bbb&woeid=455821";
 String payload="";
 DynamicJsonDocument doc(1000);
 
