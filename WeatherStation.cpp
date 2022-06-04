@@ -104,6 +104,7 @@ void setup() {
 
 void loop() {
   checkButtons();
+  delay(50);
 }
 
 void loadingTask(void *pvParameters) {
