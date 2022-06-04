@@ -93,13 +93,13 @@ void setup() {
   xTaskCreate(loadingTask, "loadingTask", 4000, NULL, 1, &loadingTaskHandle);
   xTaskCreate(callHGWeatherTask, "callHGWeatherTask", 4000, NULL, 1, &callHGWeatherTaskHandle);
   xTaskCreate(callNTPClientTask, "callNTPClientTask", 4000, NULL, 1, &callNTPClientTaskHandle);
-  xTaskCreate(updateHomeScreenTask, "updateHomeScreenTask", 4000, NULL, 1, &updateHomeScreenHandle);
 
   //Requisicao http
   callHGWeather();
 
   vTaskDelete(loadingTaskHandle);
-  homeScreen();
+
+  xTaskCreate(updateHomeScreenTask, "updateHomeScreenTask", 4000, NULL, 1, &updateHomeScreenHandle);
 }
 
 void loop() {
