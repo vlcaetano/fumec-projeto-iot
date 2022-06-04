@@ -21,9 +21,11 @@ TFT_eSPI tft = TFT_eSPI();
 TaskHandle_t loadingTaskHandle = NULL;
 TaskHandle_t callHGWeatherTaskHandle = NULL;
 TaskHandle_t callNTPClientTaskHandle = NULL;
+TaskHandle_t updateHomeScreenHandle = NULL;
 void loadingTask(void *pvParameters);
 void callHGWeatherTask(void *pvParameters);
 void callNTPClientTask(void *pvParameters);
+void updateHomeScreenTask(void *pvParameters);
 bool homeScreen();
 void setForecastValues(String *d, String *w, String *des, int *mx, int *mn, int arrayPosition);
 void forecastScreen(String *d, String *w, String *des, int *mx, int *mn);
@@ -42,7 +44,6 @@ String endpoint="https://api.hgbrasil.com/weather?array_limit=3&fields=only_resu
 String payload="";
 DynamicJsonDocument doc(1000);
 
-int count = 0;
 int screen = 0;
 int lastScreen = 2;
 
@@ -92,6 +93,7 @@ void setup() {
   xTaskCreate(loadingTask, "loadingTask", 4000, NULL, 1, &loadingTaskHandle);
   xTaskCreate(callHGWeatherTask, "callHGWeatherTask", 4000, NULL, 1, &callHGWeatherTaskHandle);
   xTaskCreate(callNTPClientTask, "callNTPClientTask", 4000, NULL, 1, &callNTPClientTaskHandle);
+  xTaskCreate(updateHomeScreenTask, "updateHomeScreenTask", 4000, NULL, 1, &updateHomeScreenHandle);
 
   //Requisicao http
   callHGWeather();
@@ -102,12 +104,6 @@ void setup() {
 
 void loop() {
   checkButtons();
-  count++;
-  if (count >= 400) {
-    count = 0;
-    if (screen == 0) homeScreen();
-  }
-  delay(50);
 }
 
 void loadingTask(void *pvParameters) {
@@ -133,6 +129,13 @@ void callNTPClientTask(void *pvParameters) {
     timeClient.update();
     hourAndMinutes = timeClient.getFormattedTime().substring(0, 5);
     vTaskDelay(pdMS_TO_TICKS(60000));
+  }
+}
+
+void updateHomeScreenTask(void *pvParameters) {
+  for (;;) {
+    if (screen == 0) homeScreen();
+    vTaskDelay(pdMS_TO_TICKS(20000));
   }
 }
 
@@ -235,8 +238,8 @@ bool homeScreen() {
   tft.setCursor(0, 0, 1);
   tft.setTextColor(TFT_WHITE,TFT_BLACK);  
   tft.setTextSize(2);
-  tft.println("Temperatura: " + String(newValues.temperature) + " C");
-  tft.println("Humidade:     " + String(newValues.humidity) + "%");
+  tft.println("Temp: " + String(newValues.temperature) + " C");
+  tft.println("Hum:  " + String(newValues.humidity) + "%");
   // tft.println("In. de calor:  " + String(heatIndex));
   // tft.println("Orvalho:     " + String(dewPoint) + " C");
   tft.println(comfortStatus);
