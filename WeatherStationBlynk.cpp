@@ -9,6 +9,7 @@
 #include <NTPClient.h> // https://github.com/arduino-libraries/NTPClient
 #include <SPI.h>
 #include <ArduinoJson.h>  // https://github.com/bblanchon/ArduinoJson.git
+#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 #include <WiFiUdp.h>
 #include <HTTPClient.h>
 
@@ -49,8 +50,6 @@ void generateScreen();
 void connectWiFi();
 void callHGWeather();
 
-const char* ssid     = "";
-const char* password = "";
 HTTPClient http;
 String endpoint="https://api.hgbrasil.com/weather?array_limit=3&fields=only_results,temp,date,time,description,currently,city,humidity,wind_speedy,sunrise,sunset,forecast,date,weekday,max,min,description,&key=a9be0bbb&woeid=455821";
 String payload="";
@@ -96,8 +95,8 @@ void myTimerEvent()
   Blynk.virtualWrite(V6, String(date1));
   Blynk.virtualWrite(V7, String(date2));
   
-  String tempAmanha = "Mín: " + String(min1) + " C  Máx: " + String(max1) + " C";
-  String tempDepoisAmanha = "Mín: " + String(min2) + " C  Máx: " + String(max2) + " C";
+  String tempAmanha = "Mín: " + String(min1) + " C,  Máx: " + String(max1) + " C";
+  String tempDepoisAmanha = "Mín: " + String(min2) + " C,  Máx: " + String(max2) + " C";
   Blynk.virtualWrite(V9, tempAmanha);
   Blynk.virtualWrite(V10, tempDepoisAmanha);
 
@@ -125,7 +124,8 @@ void setup()
   //Config do wifi
   connectWiFi();
 
-  Blynk.begin(auth, ssid, password);
+  Blynk.config(auth);
+  Blynk.connect();
   timer.setInterval(1000L, myTimerEvent);
 
   //Criacao das tasks
@@ -265,9 +265,7 @@ bool homeScreen() {
   tft.setTextColor(TFT_WHITE,TFT_BLACK);  
   tft.setTextSize(2);
   tft.println("Temp: " + String(newValues.temperature) + " C");
-  tft.println("Hum:  " + String(newValues.humidity) + "%");
-  // tft.println("In. de calor:  " + String(heatIndex));
-  // tft.println("Orvalho:     " + String(dewPoint) + " C");
+  tft.println("Umid: " + String(newValues.humidity) + "%");
   tft.println(comfortStatus);
   tft.println();
   tft.println(weekday + ", " + date + " - " + hourAndMinutes);
@@ -311,15 +309,19 @@ void setForecastValues(String *d, String *w, String *des, int *mx, int *mn, int 
 }
 
 void connectWiFi() {
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(300);
-    Serial.print(".");
+  WiFi.mode(WIFI_STA);
+
+  WiFiManager wm;
+  //wm.resetSettings();
+
+  bool res = wm.autoConnect("WeatherStation");
+
+  if(!res) {
+      Serial.println("Failed to connect");
+      ESP.restart();
+  } else { 
+      Serial.println("connected");
   }
-  Serial.println("");
-  Serial.println("WiFi connected.");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
 }
 
 void callHGWeather() {
