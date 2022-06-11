@@ -1,6 +1,6 @@
-#define BLYNK_TEMPLATE_ID           "TMPL5PpLz-Bs"
-#define BLYNK_DEVICE_NAME           "Quickstart Device"
-#define BLYNK_AUTH_TOKEN            "Dgy3A9NYrPp2hby2qMYel-eQ-Te1U4Oy"
+#define BLYNK_TEMPLATE_ID "TMPL5PpLz-Bs"
+#define BLYNK_DEVICE_NAME "Quickstart Device"
+#define BLYNK_AUTH_TOKEN  "Dgy3A9NYrPp2hby2qMYel-eQ-Te1U4Oy"
 
 #define BLYNK_PRINT Serial
 
@@ -29,6 +29,17 @@ int count = 0;
 
 char auth[] = BLYNK_AUTH_TOKEN;
 
+#define RESPONSE_ARRAY_SIZE 3
+
+typedef struct {
+  String date;
+  String weekday;
+  String description;
+  int max;
+  int min;
+} forecast;
+forecast forecasts[RESPONSE_ARRAY_SIZE];
+
 ComfortState cf;
 DHTesp dht;
 TempAndHumidity newValues;
@@ -43,15 +54,15 @@ void loadingTask(void *pvParameters);
 void callNTPClientTask(void *pvParameters);
 void updateHomeScreenTask(void *pvParameters);
 bool homeScreen();
-void setForecastValues(String *d, String *w, String *des, int *mx, int *mn, int arrayPosition);
-void forecastScreen(String *d, String *w, String *des, int *mx, int *mn);
+void setForecastValues(forecast* f, int i);
+void forecastScreen(forecast* f);
 void checkButtons();
 void generateScreen();
 void connectWiFi();
 void callHGWeather();
 
 HTTPClient http;
-String endpoint="https://api.hgbrasil.com/weather?array_limit=3&fields=only_results,temp,date,time,description,currently,city,humidity,wind_speedy,sunrise,sunset,forecast,date,weekday,max,min,description,&key=a9be0bbb&woeid=455821";
+String endpoint="https://api.hgbrasil.com/weather?array_limit="+String(RESPONSE_ARRAY_SIZE)+"&fields=only_results,temp,date,time,description,currently,city,humidity,wind_speedy,sunrise,sunset,forecast,date,weekday,max,min,description,&key=a9be0bbb&woeid=455821";
 String payload="";
 DynamicJsonDocument doc(1000);
 
@@ -63,20 +74,8 @@ String weekday;
 String description;
 String hourAndMinutes;
 
-String date1;
-String weekday1;
-String description1;
-int max1;
-int min1;
-String date2;
-String weekday2;
-String description2;
-int max2;
-int min2;
-
 // Configurações do Servidor NTP
 const char* servidorNTP = "a.st1.ntp.br"; // Servidor NTP para pesquisar a hora
- 
 const int fusoHorario = -10800; // Fuso horário em segundos (-03h = -10800 seg)
 const int taxaDeAtualizacao = 1800000; // Taxa de atualização do servidor NTP em milisegundos
 String formattedDate;
@@ -92,16 +91,16 @@ void myTimerEvent()
   Blynk.virtualWrite(V4, temp);
   Blynk.virtualWrite(V5, newValues.humidity);
 
-  Blynk.virtualWrite(V6, String(date1));
-  Blynk.virtualWrite(V7, String(date2));
+  Blynk.virtualWrite(V6, String(forecasts[1].date));
+  Blynk.virtualWrite(V7, String(forecasts[2].date));
   
-  String tempAmanha = "Mín: " + String(min1) + " C,  Máx: " + String(max1) + " C";
-  String tempDepoisAmanha = "Mín: " + String(min2) + " C,  Máx: " + String(max2) + " C";
+  String tempAmanha = "Mín: " + String(forecasts[1].min) + " C,  Máx: " + String(forecasts[1].max) + " C";
+  String tempDepoisAmanha = "Mín: " + String(forecasts[2].min) + " C,  Máx: " + String(forecasts[2].max) + " C";
   Blynk.virtualWrite(V9, tempAmanha);
   Blynk.virtualWrite(V10, tempDepoisAmanha);
 
-  Blynk.virtualWrite(V11, description1);
-  Blynk.virtualWrite(V12, description2);
+  Blynk.virtualWrite(V11, forecasts[1].description);
+  Blynk.virtualWrite(V12, forecasts[2].description);
 }
 
 void setup()
@@ -188,10 +187,10 @@ void generateScreen() {
       homeScreen();
       break;
     case 1:
-      forecastScreen(&date1, &weekday1, &description1, &max1, &min1);
+      forecastScreen(&forecasts[1]);
       break;
     case 2:
-      forecastScreen(&date2, &weekday2, &description2, &max2, &min2);
+      forecastScreen(&forecasts[2]);
       break;
     default:
       homeScreen();
@@ -199,17 +198,17 @@ void generateScreen() {
   };
 }
 
-void forecastScreen(String *d, String *w, String *des, int *mx, int *mn) {
+void forecastScreen(forecast* f) {
   tft.fillScreen(TFT_BLACK);
   tft.setCursor(0, 0, 1);
   tft.setTextColor(TFT_WHITE,TFT_BLACK);  
   tft.setTextSize(2);
-  tft.println(*w + ", " + *d);
+  tft.println(f->weekday + ", " + f->date);
   tft.println();
-  tft.println(*des);
+  tft.println(f->description);
   tft.println();
-  tft.println("Min: " + String(*mn) + " C");
-  tft.println("Max: " + String(*mx) + " C");
+  tft.println("Min: " + String(f->min) + " C");
+  tft.println("Max: " + String(f->max) + " C");
 }
 
 bool homeScreen() {
@@ -300,12 +299,12 @@ void loadingTask(void *pvParameters) {
   }
 }
 
-void setForecastValues(String *d, String *w, String *des, int *mx, int *mn, int arrayPosition) {
-  *d = doc["forecast"][arrayPosition]["date"].as<String>();
-  *w = doc["forecast"][arrayPosition]["weekday"].as<String>();
-  *des = doc["forecast"][arrayPosition]["description"].as<String>();
-  *mx = doc["forecast"][arrayPosition]["max"].as<int>();
-  *mn = doc["forecast"][arrayPosition]["min"].as<int>();
+void setForecastValues(forecast* f, int i) {
+  f->date = doc["forecast"][i]["date"].as<String>();
+  f->weekday = doc["forecast"][i]["weekday"].as<String>();
+  f->description = doc["forecast"][i]["description"].as<String>();
+  f->max = doc["forecast"][i]["max"].as<int>();
+  f->min = doc["forecast"][i]["min"].as<int>();
 }
 
 void connectWiFi() {
@@ -317,10 +316,10 @@ void connectWiFi() {
   bool res = wm.autoConnect("WeatherStation");
 
   if(!res) {
-      Serial.println("Failed to connect");
-      ESP.restart();
+    Serial.println("Failed to connect");
+    ESP.restart();
   } else { 
-      Serial.println("connected");
+    Serial.println("connected");
   }
 }
 
@@ -340,10 +339,13 @@ void callHGWeather() {
     weekday = doc["forecast"][0]["weekday"].as<String>();
     description = doc["description"].as<String>();
 
-    setForecastValues(&date1, &weekday1, &description1, &max1, &min1, 1);
-    setForecastValues(&date2, &weekday2, &description2, &max2, &min2, 2);
+    int i;
+    for (i = 0; i < RESPONSE_ARRAY_SIZE; ++i) {
+      setForecastValues(&forecasts[i], i);
+    }
   } else {
     Serial.println("Error on HTTP request");
+    ESP.restart();
   }
   http.end();
 }
